@@ -12,11 +12,18 @@ def sair(conexao):
     print(conexao, 'conexão fechada')
     conexao.fechar()
 
-
 def dados_recebidos(conexao, dados):
     
-    if dados == b'':
+    if dados == b'': # Se a string de dados recebidos for vazia
         return sair(conexao)
+    '''Passo 1: trata mensagens do tipo PING recebidas do cliente
+    Caso string de dados nao seja vazia e comece por PING, deve retornar
+    :server PONG server: <payload>
+
+    A funcao split(' ', 1) separa a string em duas, a partir do primeiro
+    espaco e seleciona a segunda parte'''
+    if dados.startswith(b'PING'):
+        conexao.enviar(b':server PONG server :' + dados.split(b' ', 1)[1])
 
     print(conexao, dados)
 
