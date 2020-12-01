@@ -33,10 +33,16 @@ def dados_recebidos(conexao, dados):
         dados = list(filter((b'').__ne__, dados))
         conexao.dados_residuais += dados.pop()
 
-    # Aqui, para cada elemento da lista dados, ou seja, para cada mensagem
-    # é necessario fazer o tratamento do passo 1
     for dado in dados:
-        conexao.enviar(b':server PONG server :' + dado.split(b' ', 1)[1] + b'\r\n')
+        instrucao, conteudo = dado.split(b' ', 1)
+        if instrucao == b'NICK':
+            if validar_nome(conteudo):
+                conexao.enviar(b':server 001 ' + conteudo + b' :Welcome\r\n')
+                conexao.enviar(b':server 422 ' + conteudo + b' :MOTD File is missing\r\n')
+            else:
+                conexao.enviar(b':server 432 ' + conexao.apelido_inicial + b' ' + conteudo + b' :Erroneous nickname\r\n')
+        if instrucao == b'PING':
+            conexao.enviar(b':server PONG server :' + conteudo + b'\r\n')
 
     print(conexao, dados)
 
@@ -44,6 +50,8 @@ def conexao_aceita(conexao):
     print(conexao, 'nova conexão')
     # Armazena os dados residuais no atributo de instância de conexao
     conexao.dados_residuais = b''
+    # Armazena apelido_inicial do usuario na conexao
+    conexao.apelido_inicial = b'*'
     conexao.registrar_recebedor(dados_recebidos)
 
 
