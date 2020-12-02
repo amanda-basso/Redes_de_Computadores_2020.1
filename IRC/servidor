@@ -37,8 +37,21 @@ def dados_recebidos(conexao, dados):
         instrucao, conteudo = dado.split(b' ', 1)
         if instrucao == b'NICK':
             if validar_nome(conteudo):
-                conexao.enviar(b':server 001 ' + conteudo + b' :Welcome\r\n')
-                conexao.enviar(b':server 422 ' + conteudo + b' :MOTD File is missing\r\n')
+                # Verifica se é um apelido inicial
+                if conexao.apelido_inicial == b'*':
+                    # Procura na lista de conexoes do servidor se já existe o nickname
+                    if any(conexao_servidor != conexao and conexao_servidor.apelido_inicial.upper() == conteudo.upper() for conexao_servidor in servidor.lista_conexao):
+                        conexao.enviar(b':server 433 ' + conexao.apelido_inicial + b' ' + conteudo + b' :Nickname is already in use\r\n')
+                    else:
+                        conexao.enviar(b':server 001 ' + conteudo + b' :Welcome\r\n')
+                        conexao.enviar(b':server 422 ' + conteudo + b' :MOTD File is missing\r\n')
+                        conexao.apelido_inicial = conteudo
+                else:
+                    if any(conexao_servidor != conexao and conexao_servidor.apelido_inicial.upper() == conteudo.upper() for conexao_servidor in servidor.lista_conexao):
+                        conexao.enviar(b':server 433 ' + conexao.apelido_inicial + b' ' + conteudo + b' :Nickname is already in use\r\n')
+                    else:
+                        conexao.enviar(b':' + conexao.apelido_inicial + b' NICK '+ conteudo + b'\r\n')
+                        conexao.apelido_inicial = conteudo
             else:
                 conexao.enviar(b':server 432 ' + conexao.apelido_inicial + b' ' + conteudo + b' :Erroneous nickname\r\n')
         if instrucao == b'PING':
@@ -50,11 +63,16 @@ def conexao_aceita(conexao):
     print(conexao, 'nova conexão')
     # Armazena os dados residuais no atributo de instância de conexao
     conexao.dados_residuais = b''
-    # Armazena apelido_inicial do usuario na conexao
+    # Caso o usuario esteja tentando definir apelido inicial, apelido_inicial é b'*'
+    # nas mensagens de erro
     conexao.apelido_inicial = b'*'
+    # É necessario atualizar a conexao na lista de conexoes do servidor
+    servidor.lista_conexao.append(conexao)
     conexao.registrar_recebedor(dados_recebidos)
 
 
 servidor = Servidor(6667)
+# É necessario criar um atributo que é uma lista de conexoes realizadas
+servidor.lista_conexao = []
 servidor.registrar_monitor_de_conexoes_aceitas(conexao_aceita)
 asyncio.get_event_loop().run_forever()
