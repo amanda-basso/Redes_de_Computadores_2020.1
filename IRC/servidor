@@ -56,8 +56,6 @@ def dados_recebidos(conexao, dados):
             conexao.enviar(b':server PONG server :' + conteudo + b'\r\n')
 
         if instrucao == b'JOIN':
-           # if validar_nome(conteudo[1:]) and conteudo.startswith(b'#'):
-           #     conexao.enviar(b':' + conexao.apelido_inicial + b' JOIN ' + conteudo + b'\r\n')
             if validar_nome(conteudo[1:]) and conteudo.startswith(b'#'):
                 conexao.lista_grupos.append(conteudo.upper())
                 #conexao.enviar(b':' + conexao.apelido_inicial + b' JOIN ' + conteudo + b'\r\n')
@@ -79,6 +77,16 @@ def dados_recebidos(conexao, dados):
                 for conexao_destinatario in servidor.lista_conexao:
                     if conexao_destinatario != conexao and conexao_destinatario.apelido_inicial.upper() == destinatario.upper():
                         conexao_destinatario.enviar(b':' + conexao.apelido_inicial + b' PRIVMSG ' + destinatario + b' :' + conteudo_mensagem + b'\r\n')
+        if instrucao == b'PART':
+            canal = conteudo.split(b' ')[0]
+            if validar_nome(canal[1:]) and canal.startswith(b'#') and canal.upper() in conexao.lista_grupos:
+                for cada_conexao in servidor.lista_conexao:
+                    if canal.upper() in cada_conexao.lista_grupos:
+                        cada_conexao.enviar(b':' + conexao.apelido_inicial + b' PART ' + canal + b'\r\n')
+                conexao.lista_grupos.remove(conteudo.upper())
+            else:
+                conexao.enviar(b':server 403 ' + conteudo + b' :No such channel\r\n')
+
 
     print(conexao, dados)
 
