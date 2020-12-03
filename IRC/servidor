@@ -16,7 +16,14 @@ def dados_recebidos(conexao, dados):
     dados = conexao.dados_residuais + dados
     conexao.dados_residuais = b''
 
-    if dados == b'': # Se a string de dados recebidos for vazia
+    if dados == b'': # Se a string de dados recebidos for vazia, usuario quer sair
+        for cada_conexao in servidor.lista_conexao:
+            flag = True
+            for grupo in conexao.lista_grupos:
+                if (grupo in cada_conexao.lista_grupos) and (conexao != cada_conexao) and flag:
+                    flag = False
+                    cada_conexao.enviar(b':' + conexao.apelido_inicial + b' QUIT :Connection closed\r\n')
+        servidor.lista_conexao.remove(conexao)
         return sair(conexao)
 
     # Caso string termine com quebra de linha, basta separa-la
@@ -83,10 +90,9 @@ def dados_recebidos(conexao, dados):
                 for cada_conexao in servidor.lista_conexao:
                     if canal.upper() in cada_conexao.lista_grupos:
                         cada_conexao.enviar(b':' + conexao.apelido_inicial + b' PART ' + canal + b'\r\n')
-                conexao.lista_grupos.remove(conteudo.upper())
+                conexao.lista_grupos.remove(canal.upper())
             else:
                 conexao.enviar(b':server 403 ' + conteudo + b' :No such channel\r\n')
-
 
     print(conexao, dados)
 
