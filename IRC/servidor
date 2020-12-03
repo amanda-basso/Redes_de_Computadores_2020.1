@@ -3,10 +3,8 @@ import asyncio
 from tcp import Servidor
 import re
 
-
 def validar_nome(nome):
     return re.match(br'^[a-zA-Z][a-zA-Z0-9_-]*$', nome) is not None
-
 
 def sair(conexao):
     print(conexao, 'conexão fechada')
@@ -56,13 +54,31 @@ def dados_recebidos(conexao, dados):
                 conexao.enviar(b':server 432 ' + conexao.apelido_inicial + b' ' + conteudo + b' :Erroneous nickname\r\n')
         if instrucao == b'PING':
             conexao.enviar(b':server PONG server :' + conteudo + b'\r\n')
+
+        if instrucao == b'JOIN':
+           # if validar_nome(conteudo[1:]) and conteudo.startswith(b'#'):
+           #     conexao.enviar(b':' + conexao.apelido_inicial + b' JOIN ' + conteudo + b'\r\n')
+            if validar_nome(conteudo[1:]) and conteudo.startswith(b'#'):
+                conexao.lista_grupos.append(conteudo.upper())
+                #conexao.enviar(b':' + conexao.apelido_inicial + b' JOIN ' + conteudo + b'\r\n')
+                for cada_conexao in servidor.lista_conexao:
+                    if conteudo.upper() in cada_conexao.lista_grupos:
+                        cada_conexao.enviar(b':' + conexao.apelido_inicial + b' JOIN :' + conteudo + b'\r\n')
+            else:
+                conexao.enviar(b':server 403 ' + conteudo + b' :No such channel\r\n')
+
         if instrucao == b'PRIVMSG':
             # Quebrar o conteudo em destinatario e conteudo da mensagem
             destinatario, conteudo_mensagem = conteudo.split(b' :', 1)
-            # Verificar se existe um destinatario, caso sim, mande a mensagem
-            for conexao_destinatario in servidor.lista_conexao:
-                if conexao_destinatario != conexao and conexao_destinatario.apelido_inicial.upper() == destinatario.upper():
-                    conexao_destinatario.enviar(b':' + conexao.apelido_inicial + b' PRIVMSG ' + destinatario + b' :' + conteudo_mensagem + b'\r\n')
+            # Quando a mensagem for direcionada para o grupo
+            if destinatario.startswith(b'#') and destinatario.upper() in conexao.lista_grupos:
+                for cada_conexao in servidor.lista_conexao:
+                    if (destinatario.upper() in cada_conexao.lista_grupos) and cada_conexao != conexao:
+                        cada_conexao.enviar(b':' + conexao.apelido_inicial + b' PRIVMSG ' + destinatario + b' :' + conteudo_mensagem + b'\r\n')
+            else:
+                for conexao_destinatario in servidor.lista_conexao:
+                    if conexao_destinatario != conexao and conexao_destinatario.apelido_inicial.upper() == destinatario.upper():
+                        conexao_destinatario.enviar(b':' + conexao.apelido_inicial + b' PRIVMSG ' + destinatario + b' :' + conteudo_mensagem + b'\r\n')
 
     print(conexao, dados)
 
@@ -75,6 +91,8 @@ def conexao_aceita(conexao):
     conexao.apelido_inicial = b'*'
     # É necessario atualizar a conexao na lista de conexoes do servidor
     servidor.lista_conexao.append(conexao)
+    # Armazena lista de grupos que o usuario da conexao pertence
+    conexao.lista_grupos = []
     conexao.registrar_recebedor(dados_recebidos)
 
 
