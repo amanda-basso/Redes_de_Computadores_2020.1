@@ -70,7 +70,13 @@ def dados_recebidos(conexao, dados):
                     if conteudo.upper() in cada_conexao.lista_grupos:
                         string_membros += b' ' + cada_conexao.apelido_inicial
                         cada_conexao.enviar(b':' + conexao.apelido_inicial + b' JOIN :' + conteudo + b'\r\n')
-                conexao.enviar(b':server 353 ' + conexao.apelido_inicial + b' = ' + conteudo + b' :' + string_membros + b'\r\n')
+
+                conexao.enviar(b':server 353 ' + conexao.apelido_inicial + b' = ' + conteudo + b' :' + string_membros[:508] + b'\r\n')
+                sobra = string_membros[508:]
+                while len(sobra) > 508:
+                    conexao.enviar(sobra[:508] + b'\r\n')
+                    sobra = sobra[508:]
+                conexao.enviar(sobra + b'\r\n')
                 conexao.enviar(b':server 366 ' + conexao.apelido_inicial + b' ' + conteudo + b' :End of /NAMES list.\r\n')
             else:
                 conexao.enviar(b':server 403 ' + conteudo + b' :No such channel\r\n')
