@@ -3,28 +3,126 @@ import asyncio
 from tcp import Servidor
 import re
 
-
 def validar_nome(nome):
     return re.match(br'^[a-zA-Z][a-zA-Z0-9_-]*$', nome) is not None
-
 
 def sair(conexao):
     print(conexao, 'conexão fechada')
     conexao.fechar()
 
-
 def dados_recebidos(conexao, dados):
-    
-    if dados == b'':
+
+    # Dados recebe a concatenacao de dados residuais e dos dados
+    dados = conexao.dados_residuais + dados
+    conexao.dados_residuais = b''
+
+    if dados == b'': # Se a string de dados recebidos for vazia, usuario quer sair
+        for cada_conexao in servidor.lista_conexao:
+            flag = True
+            for grupo in conexao.lista_grupos:
+                if (grupo in cada_conexao.lista_grupos) and (conexao != cada_conexao) and flag:
+                    flag = False
+                    cada_conexao.enviar(b':' + conexao.apelido_inicial + b' QUIT :Connection closed\r\n')
+        servidor.lista_conexao.remove(conexao)
         return sair(conexao)
+
+    # Caso string termine com quebra de linha, basta separa-la
+    # em eventuais quebras de linha internas
+    if dados.endswith(b'\r\n'):
+        dados = dados.split(b'\r\n')
+        dados = list(filter((b'').__ne__, dados))
+    # Caso contrario, alem de separar nas quebras de linhas
+    # internas, deve-se levar em consideracao os dados residuais
+    else:
+        dados = dados.split(b'\r\n')
+        dados = list(filter((b'').__ne__, dados))
+        conexao.dados_residuais += dados.pop()
+
+    for dado in dados:
+        instrucao, conteudo = dado.split(b' ', 1)
+        if instrucao == b'NICK':
+            if validar_nome(conteudo):
+                # Verifica se é um apelido inicial
+                if conexao.apelido_inicial == b'*':
+                    # Procura na lista de conexoes do servidor se já existe o nickname
+                    if any(conexao_servidor != conexao and conexao_servidor.apelido_inicial.upper() == conteudo.upper() for conexao_servidor in servidor.lista_conexao):
+                        conexao.enviar(b':server 433 ' + conexao.apelido_inicial + b' ' + conteudo + b' :Nickname is already in use\r\n')
+                    else:
+                        conexao.enviar(b':server 001 ' + conteudo + b' :Welcome\r\n')
+                        conexao.enviar(b':server 422 ' + conteudo + b' :MOTD File is missing\r\n')
+                        conexao.apelido_inicial = conteudo
+                else:
+                    if any(conexao_servidor != conexao and conexao_servidor.apelido_inicial.upper() == conteudo.upper() for conexao_servidor in servidor.lista_conexao):
+                        conexao.enviar(b':server 433 ' + conexao.apelido_inicial + b' ' + conteudo + b' :Nickname is already in use\r\n')
+                    else:
+                        conexao.enviar(b':' + conexao.apelido_inicial + b' NICK '+ conteudo + b'\r\n')
+                        conexao.apelido_inicial = conteudo
+            else:
+                conexao.enviar(b':server 432 ' + conexao.apelido_inicial + b' ' + conteudo + b' :Erroneous nickname\r\n')
+        if instrucao == b'PING':
+            conexao.enviar(b':server PONG server :' + conteudo + b'\r\n')
+
+        if instrucao == b'JOIN':
+            if validar_nome(conteudo[1:]) and conteudo.startswith(b'#'):
+                lista_membros = []
+                conexao.lista_grupos.append(conteudo.upper())
+                for cada_conexao in servidor.lista_conexao:
+                    if conteudo.upper() in cada_conexao.lista_grupos:
+                        lista_membros.append(cada_conexao.apelido_inicial)
+                        cada_conexao.enviar(b':' + conexao.apelido_inicial + b' JOIN :' + conteudo + b'\r\n')
+
+                lista_membros.sort()
+                string_membros = b' '.join(lista_membros)
+                texto_enviar = b':server 353 ' + conexao.apelido_inicial + b' = ' + conteudo + b' :' + string_membros
+                while len(texto_enviar) > 508:
+                    sobra = string_membros[:508]
+                    conexao.enviar(texto_enviar + b'\r\n')
+                    texto_enviar = sobra
+                conexao.enviar(texto_enviar + b'\r\n')
+                conexao.enviar(b':server 366 ' + conexao.apelido_inicial + b' ' + conteudo + b' :End of /NAMES list.\r\n')
+            else:
+                conexao.enviar(b':server 403 ' + conteudo + b' :No such channel\r\n')
+
+        if instrucao == b'PRIVMSG':
+            # Quebrar o conteudo em destinatario e conteudo da mensagem
+            destinatario, conteudo_mensagem = conteudo.split(b' :', 1)
+            # Quando a mensagem for direcionada para o grupo
+            if destinatario.startswith(b'#') and destinatario.upper() in conexao.lista_grupos:
+                for cada_conexao in servidor.lista_conexao:
+                    if (destinatario.upper() in cada_conexao.lista_grupos) and cada_conexao != conexao:
+                        cada_conexao.enviar(b':' + conexao.apelido_inicial + b' PRIVMSG ' + destinatario + b' :' + conteudo_mensagem + b'\r\n')
+            else:
+                for conexao_destinatario in servidor.lista_conexao:
+                    if conexao_destinatario != conexao and conexao_destinatario.apelido_inicial.upper() == destinatario.upper():
+                        conexao_destinatario.enviar(b':' + conexao.apelido_inicial + b' PRIVMSG ' + destinatario + b' :' + conteudo_mensagem + b'\r\n')
+        if instrucao == b'PART':
+            canal = conteudo.split(b' ')[0]
+            if validar_nome(canal[1:]) and canal.startswith(b'#') and canal.upper() in conexao.lista_grupos:
+                for cada_conexao in servidor.lista_conexao:
+                    if canal.upper() in cada_conexao.lista_grupos:
+                        cada_conexao.enviar(b':' + conexao.apelido_inicial + b' PART ' + canal + b'\r\n')
+                conexao.lista_grupos.remove(canal.upper())
+            else:
+                conexao.enviar(b':server 403 ' + conteudo + b' :No such channel\r\n')
 
     print(conexao, dados)
 
 def conexao_aceita(conexao):
     print(conexao, 'nova conexão')
+    # Armazena os dados residuais no atributo de instância de conexao
+    conexao.dados_residuais = b''
+    # Caso o usuario esteja tentando definir apelido inicial, apelido_inicial é b'*'
+    # nas mensagens de erro
+    conexao.apelido_inicial = b'*'
+    # É necessario atualizar a conexao na lista de conexoes do servidor
+    servidor.lista_conexao.append(conexao)
+    # Armazena lista de grupos que o usuario da conexao pertence
+    conexao.lista_grupos = []
     conexao.registrar_recebedor(dados_recebidos)
 
 
 servidor = Servidor(6667)
+# É necessario criar um atributo que é uma lista de conexoes realizadas
+servidor.lista_conexao = []
 servidor.registrar_monitor_de_conexoes_aceitas(conexao_aceita)
 asyncio.get_event_loop().run_forever()
