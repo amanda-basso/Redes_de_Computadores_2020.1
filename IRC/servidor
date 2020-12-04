@@ -64,19 +64,21 @@ def dados_recebidos(conexao, dados):
 
         if instrucao == b'JOIN':
             if validar_nome(conteudo[1:]) and conteudo.startswith(b'#'):
-                string_membros = b''
+                lista_membros = []
                 conexao.lista_grupos.append(conteudo.upper())
                 for cada_conexao in servidor.lista_conexao:
                     if conteudo.upper() in cada_conexao.lista_grupos:
-                        string_membros += b' ' + cada_conexao.apelido_inicial
+                        lista_membros.append(cada_conexao.apelido_inicial)
                         cada_conexao.enviar(b':' + conexao.apelido_inicial + b' JOIN :' + conteudo + b'\r\n')
 
-                conexao.enviar(b':server 353 ' + conexao.apelido_inicial + b' = ' + conteudo + b' :' + string_membros[:508] + b'\r\n')
-                sobra = string_membros[508:]
-                while len(sobra) > 508:
-                    conexao.enviar(sobra[:508] + b'\r\n')
-                    sobra = sobra[508:]
-                conexao.enviar(sobra + b'\r\n')
+                lista_membros.sort()
+                string_membros = b' '.join(lista_membros)
+                texto_enviar = b':server 353 ' + conexao.apelido_inicial + b' = ' + conteudo + b' :' + string_membros
+                while len(texto_enviar) > 508:
+                    sobra = string_membros[:508]
+                    conexao.enviar(texto_enviar + b'\r\n')
+                    texto_enviar = sobra
+                conexao.enviar(texto_enviar + b'\r\n')
                 conexao.enviar(b':server 366 ' + conexao.apelido_inicial + b' ' + conteudo + b' :End of /NAMES list.\r\n')
             else:
                 conexao.enviar(b':server 403 ' + conteudo + b' :No such channel\r\n')
