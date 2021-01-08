@@ -1,4 +1,5 @@
 from iputils import *
+from ipaddress import ip_network, ip_address
 
 
 class IP:
@@ -13,6 +14,10 @@ class IP:
         self.enlace.registrar_recebedor(self.__raw_recv)
         self.ignore_checksum = self.enlace.ignore_checksum
         self.meu_endereco = None
+        # Tabela de encaminhamento
+        self.tabela_encaminhamento = []
+        # Lista de cidrs que incluem o destino, para selecionar aquele que é mais restrito
+        self.lista_cidr = []
 
     def __raw_recv(self, datagrama):
         dscp, ecn, identification, flags, frag_offset, ttl, proto, \
@@ -27,10 +32,25 @@ class IP:
             # TODO: Trate corretamente o campo TTL do datagrama
             self.enlace.enviar(datagrama, next_hop)
 
+    def _busca_addr_em_cidr(self, addr, cidr):
+        range_cidr = ip_network(cidr)
+        print(range_cidr)
+        return ip_address(addr) in range_cidr
+
+    def _cidr_mais_restritivo(self):
+
     def _next_hop(self, dest_addr):
         # TODO: Use a tabela de encaminhamento para determinar o próximo salto
         # (next_hop) a partir do endereço de destino do datagrama (dest_addr).
         # Retorne o next_hop para o dest_addr fornecido.
+        # Passo 1: aqui, o next_hop só é considerado se o range do cidr incluir o destino
+        for hop in self.tabela_encaminhamento:
+            # Se não estiver na linha procurada, continua procurando
+            if not self._busca_addr_em_cidr(dest_addr, hop[0]):
+                continue
+            else:
+                 self.lista_cidr.append(hop[1]) # Se encontrar, retorna o next_hop para o dest_addr fornecido
+        return None # Se não encontrou nada, retorna None
         pass
 
     def definir_endereco_host(self, meu_endereco):
@@ -51,6 +71,9 @@ class IP:
         """
         # TODO: Guarde a tabela de encaminhamento. Se julgar conveniente,
         # converta-a em uma estrutura de dados mais eficiente.
+        # Passo 1: tabela já está pronta
+        self.tabela_encaminhamento = tabela
+
         pass
 
     def registrar_recebedor(self, callback):
