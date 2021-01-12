@@ -1,6 +1,6 @@
 from iputils import *
 from ipaddress import ip_network, ip_address
-
+import struct
 
 class IP:
     def __init__(self, enlace):
@@ -42,27 +42,15 @@ class IP:
         if ip_address(addr) in ip_network(cidr):
             # Na primeira iteração
             if self.flag:
-                print("1 Primeira iteracao")
                 self.cidr_restritivo = cidr
-                print(f"1 {self.cidr_restritivo}")
                 self.next_hop = next_hop
-                print(f"1 {self.next_hop}")
                 self.flag = False
             else:
-                print("2 Segunda iteracao")
-                print(f"2 {self.cidr_restritivo}")
-                print(f"2 {self.next_hop}")
                 n_atual = cidr.split('/')[1]
                 n_cidr_restritivo = self.cidr_restritivo.split('/')[1]
                 if int(n_atual) > int(n_cidr_restritivo):
-                    print(f"3 {n_atual}")
-                    print(f"3 {n_cidr_restritivo}")
-                    print("3 Atualiza")
                     self.cidr_restritivo = cidr
-                    print(f"3 {self.cidr_restritivo}")
                     self.next_hop = next_hop
-                    print(f"3 {self.next_hop}")
-
 
 
     def _next_hop(self, dest_addr):
@@ -114,12 +102,37 @@ class IP:
         """
         self.callback = callback
 
+    def _cria_cabecalho(self, conteudo, dest_addr):
+        # Vai formando o cabecalho do IP
+        vihl = 69 # Aqui significa que o tamanho do header tem 20 bytes e que é ipv4 (01000101)
+        dscpecn = 0
+        total_len = 20 + len(conteudo)
+        identification = 0
+        flags_offset = 0
+        ttl = 64
+        protocol = 6
+        checksum = 0
+        src_address = self.meu_endereco
+        dst_address = dest_addr
+
+        # Concatena o header do IP
+        header = struct.pack('!BBHHHBBH', vihl, dscpecn, total_len, identification, flags_offset, ttl, protocol, checksum)
+        header = header + str2addr(src_address) + str2addr(dst_address)
+        # Calculo + conserta checksum
+        header = header[:-10] + struct.pack('!H',calc_checksum(header)) + header[-8:]
+
+        # Retorna o header + segmento TCP
+        return header + conteudo
+
     def enviar(self, segmento, dest_addr):
         """
         Envia segmento para dest_addr, onde dest_addr é um endereço IPv4
         (string no formato x.y.z.w).
         """
         next_hop = self._next_hop(dest_addr)
+        # Passo 2: cria o datagrama
+        datagrama = self._cria_cabecalho(segmento, dest_addr)
+
         # TODO: Assumindo que a camada superior é o protocolo TCP, monte o
         # datagrama com o cabeçalho IP, contendo como payload o segmento.
         self.enlace.enviar(datagrama, next_hop)
