@@ -35,7 +35,16 @@ class IP:
         else:
             # atua como roteador
             next_hop = self._next_hop(dst_addr)
-            # TODO: Trate corretamente o campo TTL do datagrama
+            # Passo 4: Trate corretamente o campo TTL do datagrama
+            # Diminuir TTL, se for 0, retorna
+            ttl -= 1
+            if ttl == 0:
+                return
+            # Substituir no header novo TTL
+            datagrama = datagrama[:-12] + bytes([ttl]) + datagrama[-11:]
+            datagrama = datagrama[:-10] + struct.pack('!H', 0) + datagrama[-8:]
+            datagrama = datagrama[:-10] + struct.pack('!H',calc_checksum(datagrama)) + datagrama[-8:]
+            # Recalcula checksum
             self.enlace.enviar(datagrama, next_hop)
 
     def _busca_addr_em_cidr(self, addr, cidr, next_hop):
