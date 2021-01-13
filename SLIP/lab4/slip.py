@@ -53,13 +53,16 @@ class Enlace:
         # serial, fazendo corretamente a delimitação de quadros e o escape de
         # sequências especiais, de acordo com o protocolo CamadaEnlace (RFC 1055).
         # Passo 1 e Passo 2: Precisa substituir pelas sequências de escape
-        conteudo = self._substitui_bytes(datagrama)
+        conteudo = self._substitui_bytes(datagrama, False)
         self.linha_serial.enviar(b'\xc0' + conteudo + b'\xc0')
 
         pass
 
-    def _substitui_bytes(self, datagrama):
-        conteudo = datagrama.replace(b'\xdb', b'\xdb\xdd').replace(b'\xc0', b'\xdb\xdc')
+    def _substitui_bytes(self, datagrama, inverte):
+        if inverte == False:
+            conteudo = datagrama.replace(b'\xdb', b'\xdb\xdd').replace(b'\xc0', b'\xdb\xdc')
+        else:
+            conteudo = datagrama.replace(b'\xdb\xdc', b'\xc0').replace(b'\xdb\xdd', b'\xdb')
         return conteudo
 
     def __raw_recv(self, dados):
@@ -75,8 +78,6 @@ class Enlace:
         self.residuo = b''
 
         # Verifica se o pacote veio com o fim de mensagem correto
-        if dados == b'':
-            return
         if dados.endswith(b'\xc0'):
             dados = list(filter((b'').__ne__, dados.split(b'\xc0')))
         else: # Significa que veio pacote incompleto, tem residuo
@@ -84,7 +85,11 @@ class Enlace:
             self.residuo += dados.pop()
 
         for dado in dados:
-            conteudo = self._substitui_bytes(dado)
-            self.callback(conteudo)
+            conteudo = self._substitui_bytes(dado, True)
+            try:
+                self.callback(conteudo)
+            except:
+                import traceback
+                traceback.print_exc()
 
         pass
