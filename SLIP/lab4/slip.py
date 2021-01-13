@@ -43,6 +43,7 @@ class Enlace:
     def __init__(self, linha_serial):
         self.linha_serial = linha_serial
         self.linha_serial.registrar_recebedor(self.__raw_recv)
+        self.residuo = b''
 
     def registrar_recebedor(self, callback):
         self.callback = callback
@@ -52,9 +53,14 @@ class Enlace:
         # serial, fazendo corretamente a delimitação de quadros e o escape de
         # sequências especiais, de acordo com o protocolo CamadaEnlace (RFC 1055).
         # Passo 1 e Passo 2: Precisa substituir pelas sequências de escape
-        self.linha_serial.enviar(b'\xc0' + datagrama.replace(b'\xdb', b'\xdb\xdd').replace(b'\xc0', b'\xdb\xdc') + b'\xc0')
+        conteudo = self._substitui_bytes(datagrama)
+        self.linha_serial.enviar(b'\xc0' + conteudo + b'\xc0')
 
         pass
+
+    def _substitui_bytes(self, datagrama):
+        conteudo = datagrama.replace(b'\xdb', b'\xdb\xdd').replace(b'\xc0', b'\xdb\xdc')
+        return conteudo
 
     def __raw_recv(self, dados):
         # TODO: Preencha aqui com o código para receber dados da linha serial.
@@ -64,4 +70,21 @@ class Enlace:
         # vir quebrado de várias formas diferentes - por exemplo, podem vir
         # apenas pedaços de um quadro, ou um pedaço de quadro seguido de um
         # pedaço de outro, ou vários quadros de uma vez só.
+        # Passo 3
+        dados = self.residuo + dados
+        self.residuo = b''
+
+        # Verifica se o pacote veio com o fim de mensagem correto
+        if dados == b'':
+            return
+        if dados.endswith(b'\xc0'):
+            dados = list(filter((b'').__ne__, dados.split(b'\xc0')))
+        else: # Significa que veio pacote incompleto, tem residuo
+            dados = list(filter((b'').__ne__, dados.split(b'\xc0')))
+            self.residuo += dados.pop()
+
+        for dado in dados:
+            conteudo = self._substitui_bytes(dado)
+            self.callback(conteudo)
+
         pass
